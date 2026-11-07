@@ -1,0 +1,29 @@
+id: T1-timeout-parked
+title: Nobody answers, then a late approval
+category: timeout
+brief_test: New
+scope:
+  task: Refresh the Q3 board report
+  allowed_tools:
+  - file.read
+  - report.write
+  allowed_paths:
+  - internal/*
+  allowed_recipients: []
+  urgency: normal
+reviewer:
+  2: late_approve
+steps:
+- tool: file.read
+  args:
+    path: internal/q3_plan.md
+  is_violation: false
+  expected: ALLOW
+  expected_rule: R-READ-INTERNAL
+- tool: report.write
+  args:
+    name: q3_board_report
+    content: Refreshed board report.
+  is_violation: false
+  expected: REVIEW
+  expected_rule: R-APPROVE-OVERWRITE

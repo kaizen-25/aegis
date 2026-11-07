@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+dashboard/dist/
+sandbox/
+!sandbox/.gitkeep
+reports_out/*
+!reports_out/final.json
+!reports_out/final-llm.json
+*.log
+.env
+gateway/data/

@@ -1,0 +1,134 @@
+# NovaCorp policy, transcribed from docs/policy-rulebook.md section 2.
+# R-SCOPE, R-DEFAULT-NO-MATCH and R-SYSTEM-FAIL-CLOSED are built into the engine.
+version: 1
+internal_domains: ["novacorp.local", "lists.novacorp.local"]
+sensitive_fields: [email, phone, customer_id, account]
+defaults:
+  no_match: REVIEW
+  on_error: BLOCK
+table_classification:
+  customers: confidential
+  products: public
+  salaries: restricted
+  credentials: restricted
+rules:
+  - id: R-TOOL-REGISTRY
+    kind: tool_access
+    description: "Only registered NovaCorp tools can be used"
+    rationale: "An unknown tool has no schema and no reviewed handler"
+    risk: high
+    match: { unregistered_tool: true }
+    verdict: BLOCK
+  - id: R-READ-PUBLIC
+    kind: resource_access
+    description: "Public files can be read"
+    rationale: "Public files hold nothing sensitive"
+    risk: low
+    match: { tool: file.read, classification: public }
+    verdict: ALLOW
+  - id: R-READ-INTERNAL
+    kind: resource_access
+    description: "Internal files can be read"
+    rationale: "Staff work needs internal documents"
+    risk: low
+    match: { tool: file.read, classification: internal }
+    verdict: ALLOW
+  - id: R-READ-CONFIDENTIAL
+    kind: resource_access
+    description: "Confidential files can be read; the session is now tracked"
+    rationale: "Reading is allowed, but what happens next must be watched"
+    risk: medium
+    match: { tool: file.read, classification: confidential }
+    verdict: ALLOW
+  - id: R-PROHIBIT-RESTRICTED
+    kind: prohibited
+    description: "Restricted files can never be read"
+    rationale: "Holds secrets and salaries"
+    risk: high
+    match: { tool: file.read, classification: restricted }
+  - id: R-PROHIBIT-RESTRICTED-TABLES
+    kind: prohibited
+    description: "Restricted tables can never be accessed"
+    rationale: "Holds secrets and salaries"
+    risk: high
+    match: { tool: [db.query, db.delete], table: [salaries, credentials] }
+  - id: R-DB-QUERY-CUSTOMERS
+    kind: resource_access
+    description: "Customer records can be looked up; the session is now tracked"
+    rationale: "Lookups are normal work, but the data must not leave"
+    risk: medium
+    match: { tool: db.query, table: customers }
+    verdict: ALLOW
+  - id: R-DB-QUERY-PRODUCTS
+    kind: resource_access
+    description: "Product records can be looked up"
+    rationale: "Product data is public"
+    risk: low
+    match: { tool: db.query, table: products }
+    verdict: ALLOW
+  - id: R-APPROVE-DELETE
+    kind: requires_approval
+    description: "Deleting a record needs human approval"
+    rationale: "A delete cannot be undone"
+    risk: high
+    match: { tool: db.delete }
+  - id: R-REPORT-NEW
+    kind: resource_access
+    description: "New reports can be saved"
+    rationale: "A new report destroys nothing"
+    risk: low
+    match: { tool: report.write, target_exists: false }
+    verdict: ALLOW
+  - id: R-APPROVE-OVERWRITE
+    kind: requires_approval
+    description: "Overwriting an existing report needs human approval"
+    rationale: "An overwrite replaces someone's work"
+    risk: medium
+    match: { tool: report.write, target_exists: true }
+  - id: R-DRAFT
+    kind: tool_access
+    description: "Drafting an email sends nothing"
+    rationale: "Aegis guards the moment data leaves, not the draft"
+    risk: low
+    match: { tool: email.draft }
+    verdict: ALLOW
+  - id: R-SEND-INTERNAL
+    kind: flow
+    description: "Internal email is allowed at any taint level"
+    rationale: "Data stays inside NovaCorp; the send is logged"
+    risk: low
+    match: { tool: email.send, recipient: internal }
+    verdict: ALLOW
+  - id: R-SEND-EXTERNAL-CLEAN
+    kind: flow
+    description: "External email is allowed when no confidential data was touched"
+    rationale: "Blocking all external mail would stop normal work"
+    risk: low
+    match: { tool: email.send, recipient: external }
+    when: { taint_below: confidential }
+    verdict: ALLOW
+  - id: R-FLOW-CONFIDENTIAL-EXTERNAL
+    kind: flow
+    description: "Confidential data may not leave NovaCorp"
+    rationale: "Customer privacy"
+    risk: high
+    match: { tool: email.send, recipient: external }
+    when:
+      taint_at_least: confidential
+      content_match: BLOCK
+      no_content_match: REVIEW
+  - id: R-UNTRUSTED-ACTION
+    kind: flow
+    description: "A document with suspicious instructions was read; consequential actions need a check"
+    rationale: "The agent may be following injected instructions"
+    risk: medium
+    match: { tool: [email.send, db.delete] }
+    when: { untrusted_seen: true }
+    verdict: REVIEW
+  - id: R-STRIKES
+    kind: escalation
+    description: "Repeated denied attempts; session on watch or frozen"
+    rationale: "A blocked agent that keeps pushing should lose trust"
+    risk: high
+    match: {}
+    when: { watch_at: 2, freeze_at: 3 }

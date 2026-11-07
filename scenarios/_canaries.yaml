@@ -1,0 +1,5 @@
+# Test fixture so /agent can resolve {{canary.*}} without touching /sandbox.
+email_1: meera.k.canary@examplemail.test
+phone_1: +91 98765 43210
+customer_id_1: NC-CUST-7741
+account_1: ACC-0042-CANARY
